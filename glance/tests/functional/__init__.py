@@ -48,6 +48,10 @@ from glance.tests import utils as test_utils
 execute, get_unused_port = test_utils.execute, test_utils.get_unused_port
 tracecmd_osmap = {'Linux': 'strace', 'FreeBSD': 'truss'}
 
+if os.name == 'nt':
+    SQLITE_CONN_TEMPLATE = 'sqlite:///%s/tests.sqlite'
+else:
+    SQLITE_CONN_TEMPLATE = 'sqlite:////%s/tests.sqlite'
 
 class Server(object):
     """
@@ -305,7 +309,7 @@ class ApiServer(Server):
         self.disable_path = None
 
         self.needs_database = True
-        default_sql_connection = 'sqlite:////%s/tests.sqlite' % self.test_dir
+        default_sql_connection = SQLITE_CONN_TEMPLATE % self.test_dir
         self.sql_connection = os.environ.get('GLANCE_TEST_SQL_CONNECTION',
                                              default_sql_connection)
         self.data_api = kwargs.get("data_api",
@@ -488,7 +492,7 @@ class ApiServerForMultipleBackend(Server):
         self.disable_path = None
 
         self.needs_database = True
-        default_sql_connection = 'sqlite:////%s/tests.sqlite' % self.test_dir
+        default_sql_connection = SQLITE_CONN_TEMPLATE % self.test_dir
         self.sql_connection = os.environ.get('GLANCE_TEST_SQL_CONNECTION',
                                              default_sql_connection)
         self.data_api = kwargs.get("data_api",
@@ -646,7 +650,7 @@ class RegistryServer(Server):
         self.server_module = 'glance.cmd.%s' % self.server_name
 
         self.needs_database = True
-        default_sql_connection = 'sqlite:////%s/tests.sqlite' % self.test_dir
+        default_sql_connection = SQLITE_CONN_TEMPLATE % self.test_dir
         self.sql_connection = os.environ.get('GLANCE_TEST_SQL_CONNECTION',
                                              default_sql_connection)
 
@@ -732,7 +736,7 @@ class ScrubberDaemon(Server):
         self.metadata_encryption_key = "012345678901234567890123456789ab"
         self.lock_path = self.test_dir
 
-        default_sql_connection = 'sqlite:////%s/tests.sqlite' % self.test_dir
+        default_sql_connection = SQLITE_CONN_TEMPLATE % self.test_dir
         self.sql_connection = os.environ.get('GLANCE_TEST_SQL_CONNECTION',
                                              default_sql_connection)
         self.policy_file = policy_file

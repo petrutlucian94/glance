@@ -328,7 +328,11 @@ def execute(cmd,
     path_ext = [os.path.join(os.getcwd(), 'bin')]
 
     # Also jack in the path cmd comes from, if it's absolute
-    args = shlex.split(cmd)
+    if os.name != 'nt':
+        args = shlex.split(cmd)
+    else:
+        args = cmd
+
     executable = args[0]
     if os.path.isabs(executable):
         path_ext.append(os.path.dirname(executable))
