@@ -17,6 +17,7 @@
 
 import errno
 import functools
+import multiprocessing
 import os
 import shlex
 import shutil
@@ -517,11 +518,18 @@ def start_http_server(image_id, image_data):
     httpd = BaseHTTPServer.HTTPServer(server_address, handler_class)
     port = httpd.socket.getsockname()[1]
 
-    pid = os.fork()
-    if pid == 0:
-        httpd.serve_forever()
+    # TODO: drop this check
+    if os.name == 'nt':
+        # TODO: use job objects
+        p = multiprocessing.Process(target=httpd.serve_forever)
+        p.start()
+        return p.pid, port
     else:
-        return pid, port
+        pid = os.fork()
+        if pid == 0:
+            httpd.serve_forever()
+        else:
+            return pid, port
 
 
 class RegistryAPIMixIn(object):
@@ -737,8 +745,13 @@ def start_standalone_http_server():
     httpd = BaseHTTPServer.HTTPServer(server_address, handler_class)
     port = httpd.socket.getsockname()[1]
 
-    pid = os.fork()
-    if pid == 0:
-        httpd.serve_forever()
+    if os.name == 'nt':
+        p = multiprocessing.Process(target=httpd.serve_forever)
+        p.start()
+        return p.pid, port
     else:
-        return pid, port
+        pid = os.fork()
+        if pid == 0:
+            httpd.serve_forever()
+        else:
+            return pid, port
