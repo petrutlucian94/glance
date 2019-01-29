@@ -48,6 +48,7 @@ if os.path.exists(os.path.join(possible_topdir, 'glance', '__init__.py')):
     sys.path.insert(0, possible_topdir)
 
 import glance_store
+from os_win import utilsfactory as os_win_utilsfactory
 from oslo_config import cfg
 from oslo_log import log as logging
 
@@ -62,10 +63,27 @@ CONF.set_default(name='use_stderr', default=True)
 
 
 def main():
-    CONF.register_cli_opts(scrubber.scrubber_cmd_cli_opts)
-    CONF.register_opts(scrubber.scrubber_cmd_opts)
+    # Used on Window, ensuring that a single scrubber can run at a time.
+    mutex = None
+    mutex_acquired = False
 
     try:
+        already_running_msg = (
+            "ERROR: glance-scrubber is already running. "
+            "Please ensure that the daemon is stopped.")
+
+        if os.name == 'nt':
+            # We can't rely on process names on Windows as there may be
+            # wrappers with the same name.
+            mutex = os_win_utilsfactory.get_mutex(
+                name='Global\\glance-scrubber')
+            mutex_acquired = mutex.acquire(timeout_ms=0)
+            if not mutex_acquired:
+                sys.exit(already_running_msg)
+
+        CONF.register_cli_opts(scrubber.scrubber_cmd_cli_opts)
+        CONF.register_opts(scrubber.scrubber_cmd_opts)
+
         config.parse_args()
         logging.setup(CONF, 'glance')
 
@@ -73,45 +91,16 @@ def main():
         glance_store.create_stores(config.CONF)
         glance_store.verify_default_store()
 
-        app = scrubber.Scrubber(glance_store)
-
         if CONF.restore and CONF.daemon:
             sys.exit("ERROR: The restore and daemon options should not be set "
                      "together. Please use either of them in one request.")
+
+        app = scrubber.Scrubber(glance_store)
+
         if CONF.restore:
-            # Try to check the glance-scrubber is running or not.
-            # 1. Try to find the pid file if scrubber is controlled by
-            #    glance-control
-            # 2. Try to check the process name.
-            error_str = ("ERROR: The glance-scrubber process is running under "
-                         "daemon. Please stop it first.")
-            pid_file = '/var/run/glance/glance-scrubber.pid'
-            if os.path.exists(os.path.abspath(pid_file)):
-                sys.exit(error_str)
+            if os.name != 'nt' and scrubber_already_running_posix():
+                sys.exit(already_running_msg)
 
-            for glance_scrubber_name in ['glance-scrubber',
-                                         'glance.cmd.scrubber']:
-                cmd = subprocess.Popen(
-                    ['/usr/bin/pgrep', '-f', glance_scrubber_name],
-                    stdout=subprocess.PIPE, shell=False)
-                pids, _ = cmd.communicate()
-
-                # The response format of subprocess.Popen.communicate() is
-                # diffderent between py2 and py3. It's "string" in py2, but
-                # "bytes" in py3.
-                if isinstance(pids, bytes):
-                    pids = pids.decode()
-                self_pid = os.getpid()
-
-                if pids.count('\n') > 1 and str(self_pid) in pids:
-                    # One process is self, so if the process number is > 1, it
-                    # means that another glance-scrubber process is running.
-                    sys.exit(error_str)
-                elif pids.count('\n') > 0 and str(self_pid) not in pids:
-                    # If self is not in result and the pids number is still
-                    # > 0, it means that the another glance-scrubber process is
-                    # running.
-                    sys.exit(error_str)
             app.revert_image_status(CONF.restore)
         elif CONF.daemon:
             server = scrubber.Daemon(CONF.wakeup_time)
@@ -123,6 +112,44 @@ def main():
         sys.exit("ERROR: %s" % e)
     except RuntimeError as e:
         sys.exit("ERROR: %s" % e)
+    finally:
+        if mutex and mutex_acquired:
+            mutex.release()
+
+def scrubber_already_running_posix():
+    # Try to check the glance-scrubber is running or not.
+    # 1. Try to find the pid file if scrubber is controlled by
+    #    glance-control
+    # 2. Try to check the process name.
+    pid_file = '/var/run/glance/glance-scrubber.pid'
+    if os.path.exists(os.path.abspath(pid_file)):
+        return True
+
+    for glance_scrubber_name in ['glance-scrubber',
+                                 'glance.cmd.scrubber']:
+        cmd = subprocess.Popen(
+            ['/usr/bin/pgrep', '-f', glance_scrubber_name],
+            stdout=subprocess.PIPE, shell=False)
+        pids, _ = cmd.communicate()
+
+        # The response format of subprocess.Popen.communicate() is
+        # diffderent between py2 and py3. It's "string" in py2, but
+        # "bytes" in py3.
+        if isinstance(pids, bytes):
+            pids = pids.decode()
+        self_pid = os.getpid()
+
+        if pids.count('\n') > 1 and str(self_pid) in pids:
+            # One process is self, so if the process number is > 1, it
+            # means that another glance-scrubber process is running.
+            return True
+        elif pids.count('\n') > 0 and str(self_pid) not in pids:
+            # If self is not in result and the pids number is still
+            # > 0, it means that the another glance-scrubber process is
+            # running.
+            return True
+
+    return False
 
 
 if __name__ == '__main__':

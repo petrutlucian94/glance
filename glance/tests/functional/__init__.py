@@ -38,6 +38,7 @@ import time
 
 import fixtures
 from os_win import utilsfactory as os_win_utilsfactory
+from oslo_config import cfg
 from oslo_serialization import jsonutils
 # NOTE(jokke): simplified transition to py3, behaves like py2 xrange
 from six.moves import range
@@ -56,6 +57,10 @@ if os.name == 'nt':
     SQLITE_CONN_TEMPLATE = 'sqlite:///%s/tests.sqlite'
 else:
     SQLITE_CONN_TEMPLATE = 'sqlite:////%s/tests.sqlite'
+
+
+CONF = cfg.CONF
+CONF.import_opt('registry_host', 'glance.registry')
 
 
 @six.add_metaclass(abc.ABCMeta)
