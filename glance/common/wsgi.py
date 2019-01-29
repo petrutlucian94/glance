@@ -359,7 +359,7 @@ def get_num_workers():
     """Return the configured number of workers."""
 
     # Windows only: we're already running on the worker side.
-    if os.name == 'nt' and CONF.pipe_handle:
+    if os.name == 'nt' and getattr(CONF, 'pipe_handle', None):
         return 0
 
     if CONF.workers is None:
@@ -913,12 +913,11 @@ class Win32Server(BaseServer):
     def _get_sock_from_parent(self):
         # This is supposed to be called exactly once in the child process.
         # We're passing a copy of the socket through a pipe.
-        if not CONF.pipe_handle:
+        pipe_handle = int(getattr(CONF, 'pipe_handle', 0))
+        if not pipe_handle:
             err_msg = _("Did not receive a pipe handle, which is used when "
                         "communicating with the parent process.")
             raise exception.GlanceException(err_msg)
-
-        pipe_handle = int(CONF.pipe_handle)
 
         # Get the length of the data to be received.
         buff = self._ioutils.get_buffer(4)
@@ -937,8 +936,9 @@ class Win32Server(BaseServer):
     def configure_socket(self, old_conf=None, has_changed=None):
         fresh_start = not (old_conf or has_changed)
         use_ssl = CONF.cert_file or CONF.key_file
+        pipe_handle = getattr(CONF, 'pipe_handle', None)
 
-        if not (fresh_start and CONF.pipe_handle):
+        if not (fresh_start and pipe_handle):
             return super(Win32Server, self).configure_socket(
                 old_conf, has_changed)
 

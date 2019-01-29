@@ -48,16 +48,16 @@ class TestImages(functional.FunctionalTest):
         for i in range(3):
             ret = test_utils.start_http_server("foo_image_id%d" % i,
                                                "foo_image%d" % i)
-            setattr(self, 'http_server%d_pid' % i, ret[0])
-            setattr(self, 'http_port%d' % i, ret[1])
+            setattr(self, 'http_server%d' % i, ret[1])
+            setattr(self, 'http_port%d' % i, ret[2])
         self.api_server.use_user_token = True
         self.api_server.send_identity_credentials = True
 
     def tearDown(self):
         for i in range(3):
-            pid = getattr(self, 'http_server%d_pid' % i, None)
-            if pid:
-                os.kill(pid, signal.SIGKILL)
+            httpd = getattr(self, 'http_server%d' % i, None)
+            if httpd:
+                httpd.shutdown()
 
         super(TestImages, self).tearDown()
 
@@ -343,7 +343,7 @@ class TestImages(functional.FunctionalTest):
         })
 
         # Start http server locally
-        pid, port = test_utils.start_standalone_http_server()
+        thread, httpd, port = test_utils.start_standalone_http_server()
 
         image_data_uri = 'http://localhost:%s/' % port
         data = jsonutils.dumps({'method': {
@@ -373,7 +373,7 @@ class TestImages(functional.FunctionalTest):
                                                   status='active')
 
         # kill the local http server
-        os.kill(pid, signal.SIGKILL)
+        httpd.shutdown()
 
         # Deleting image should work
         path = self._url('/v2/images/%s' % image_id)
@@ -1609,8 +1609,8 @@ class TestImages(functional.FunctionalTest):
         path = self._url('/v2/images/%s' % image_id)
         media_type = 'application/openstack-images-v2.1-json-patch'
         headers = self._headers({'content-type': media_type})
-        http_server_pid, http_port = test_utils.start_http_server(image_id,
-                                                                  "image-1")
+        thread, httpd, http_port = test_utils.start_http_server(image_id,
+                                                                "image-1")
         values = [{'url': 'http://127.0.0.1:%s/image-1' % http_port,
                    'metadata': {'idx': '0'}}]
         doc = [{'op': 'replace',
@@ -1627,7 +1627,7 @@ class TestImages(functional.FunctionalTest):
         self.assertEqual(http.OK, response.status_code)
 
         # Stop http server used to update image location
-        os.kill(http_server_pid, signal.SIGKILL)
+        httpd.shutdown()
 
         # Download an image should raise HTTPServiceUnavailable
         path = self._url('/v2/images/%s/file' % image_id)
@@ -3895,14 +3895,14 @@ class TestImageLocationSelectionStrategy(functional.FunctionalTest):
         for i in range(3):
             ret = test_utils.start_http_server("foo_image_id%d" % i,
                                                "foo_image%d" % i)
-            setattr(self, 'http_server%d_pid' % i, ret[0])
-            setattr(self, 'http_port%d' % i, ret[1])
+            setattr(self, 'http_server%d' % i, ret[1])
+            setattr(self, 'http_port%d' % i, ret[2])
 
     def tearDown(self):
         for i in range(3):
-            pid = getattr(self, 'http_server%d_pid' % i, None)
-            if pid:
-                os.kill(pid, signal.SIGKILL)
+            httpd = getattr(self, 'http_server%d' % i, None)
+            if httpd:
+                httpd.shutdown()
 
         super(TestImageLocationSelectionStrategy, self).tearDown()
 
@@ -4453,14 +4453,14 @@ class TestImagesMultipleBackend(functional.MultipleBackendFunctionalTest):
         for i in range(3):
             ret = test_utils.start_http_server("foo_image_id%d" % i,
                                                "foo_image%d" % i)
-            setattr(self, 'http_server%d_pid' % i, ret[0])
-            setattr(self, 'http_port%d' % i, ret[1])
+            setattr(self, 'http_server%d' % i, ret[1])
+            setattr(self, 'http_port%d' % i, ret[2])
 
     def tearDown(self):
         for i in range(3):
-            pid = getattr(self, 'http_server%d_pid' % i, None)
-            if pid:
-                os.kill(pid, signal.SIGKILL)
+            httpd = getattr(self, 'http_server%d' % i, None)
+            if httpd:
+                httpd.shutdown()
 
         super(TestImagesMultipleBackend, self).tearDown()
 
@@ -4909,7 +4909,7 @@ class TestImagesMultipleBackend(functional.MultipleBackendFunctionalTest):
         })
 
         # Start http server locally
-        pid, port = test_utils.start_standalone_http_server()
+        thread, httpd, port = test_utils.start_standalone_http_server()
 
         image_data_uri = 'http://localhost:%s/' % port
         data = jsonutils.dumps({'method': {
@@ -4939,7 +4939,7 @@ class TestImagesMultipleBackend(functional.MultipleBackendFunctionalTest):
                                                   status='active')
 
         # kill the local http server
-        os.kill(pid, signal.SIGKILL)
+        httpd.shutdown()
         # Ensure image is created in default backend
         path = self._url('/v2/images/%s' % image_id)
         response = requests.get(path, headers=self._headers())
@@ -5069,7 +5069,7 @@ class TestImagesMultipleBackend(functional.MultipleBackendFunctionalTest):
         })
 
         # Start http server locally
-        pid, port = test_utils.start_standalone_http_server()
+        thread, httpd, port = test_utils.start_standalone_http_server()
 
         image_data_uri = 'http://localhost:%s/' % port
         data = jsonutils.dumps({'method': {
@@ -5099,7 +5099,7 @@ class TestImagesMultipleBackend(functional.MultipleBackendFunctionalTest):
                                                   status='active')
 
         # kill the local http server
-        os.kill(pid, signal.SIGKILL)
+        httpd.shutdown()
 
         # Ensure image is created in different backend
         path = self._url('/v2/images/%s' % image_id)
